@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pnpm create:*)"
+      "Bash(pnpm create:*)",
+      "Bash(pnpm install:*)",
+      "Bash(mkdir -p /Users/proctoi/Documents/Coding/ai-obsidian-board/src/app/api/cards/\\\\[id\\\\]/content)",
+      "Bash(mkdir -p /Users/proctoi/Documents/Coding/ai-obsidian-board/src/app/api/cards/\\\\[id\\\\]/move)",
+      "Bash(mkdir -p /Users/proctoi/Documents/Coding/ai-obsidian-board/src/app/api/cards/\\\\[id\\\\]/ai-review)",
+      "Bash(mkdir -p /Users/proctoi/Documents/Coding/ai-obsidian-board/src/app/api/cards/\\\\[id\\\\]/ai-diff)",
+      "Bash(mkdir -p /Users/proctoi/Documents/Coding/ai-obsidian-board/src/app/api/cards/\\\\[id\\\\]/accept)",
+      "Bash(pnpm tsc:*)",
+      "Bash(pnpm build:*)"
     ]
   }
 }

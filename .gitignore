@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local server state
+.server.pid
+.server.log
+
+# database
+/data/
