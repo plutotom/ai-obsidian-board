@@ -494,7 +494,7 @@ function KanbanColumn({
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   return (
-    <div className="flex flex-col w-64 flex-shrink-0">
+    <div className="flex flex-col w-64 flex-shrink-0 h-full min-h-0">
       {/* Column header */}
       <div className={`flex items-center gap-2 mb-3 pb-2 border-b ${column.headerColor}`}>
         <h3 className="text-xs font-semibold uppercase tracking-wider">
@@ -506,7 +506,7 @@ function KanbanColumn({
       {/* Drop zone */}
       <div
         ref={setNodeRef}
-        className={`flex-1 min-h-32 rounded-xl transition-colors ${column.color} ${
+        className={`flex-1 min-h-0 overflow-y-auto rounded-xl transition-colors ${column.color} ${
           isOver ? "ring-2 ring-blue-500/50" : ""
         } p-2 space-y-2`}
       >
