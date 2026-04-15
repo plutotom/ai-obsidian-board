@@ -1,5 +1,43 @@
 import Anthropic from "@anthropic-ai/sdk";
+import fs from "fs";
+import path from "path";
 import { getSettings } from "./db";
+
+const VAULT_ROOT = process.env.VAULT_ROOT_PATH!;
+
+/** Injected on every AI review. Keep small for local models — add paths here if you want more context. */
+export const ALWAYS_LOAD_SKILL_PATHS = [
+  "ai/skills/yaml-frontmatter/SKILL.md",
+] as const;
+
+/** Not injected by default. Listed in Settings as “available” only. */
+export const ON_DEMAND_SKILL_PATHS = [
+  "ai/skills/note-formatting/SKILL.md",
+  "ai/references/tag-taxonomy.md",
+  "ai/skills/vault-structure/SKILL.md",
+  "ai/references/folder-map.md",
+] as const;
+
+function readIfExists(relPath: string): string | null {
+  const full = path.join(VAULT_ROOT, relPath);
+  if (!fs.existsSync(full)) return null;
+  return fs.readFileSync(full, "utf-8");
+}
+
+export function buildSkillContext(): string {
+  const sections: string[] = [];
+
+  for (const relPath of ALWAYS_LOAD_SKILL_PATHS) {
+    const content = readIfExists(relPath);
+    if (content) {
+      sections.push(`### ${relPath}\n\n${content}`);
+    }
+  }
+
+  if (sections.length === 0) return "";
+
+  return `## Vault Knowledge Base\n\nThe following files from this vault provide context for your task. Use them:\n\n${sections.join("\n\n---\n\n")}`;
+}
 
 export async function runAiReview(
   fileContent: string,
@@ -7,26 +45,26 @@ export async function runAiReview(
 ): Promise<string> {
   const settings = getSettings();
   const provider = settings.ai_provider;
+  const skillContext = buildSkillContext();
+  const fullPrompt = skillContext
+    ? `${prompt}\n\n${skillContext}\n\n---\n\nNOTE TO PROCESS:\n\n${fileContent}`
+    : `${prompt}\n\n---\n\n${fileContent}`;
 
   if (provider === "ollama") {
-    return runOllama(fileContent, prompt, settings.ollama_model);
+    return runOllama(fullPrompt, settings.ollama_model);
   } else {
-    return runAnthropic(fileContent, prompt, settings.anthropic_model);
+    return runAnthropic(fullPrompt, settings.anthropic_model);
   }
 }
 
-async function runOllama(
-  content: string,
-  prompt: string,
-  model: string
-): Promise<string> {
+async function runOllama(fullPrompt: string, model: string): Promise<string> {
   const baseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
   const res = await fetch(`${baseUrl}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
-      prompt: `${prompt}\n\n---\n\n${content}`,
+      prompt: fullPrompt,
       stream: false,
     }),
   });
@@ -37,11 +75,7 @@ async function runOllama(
   return data.response as string;
 }
 
-async function runAnthropic(
-  content: string,
-  prompt: string,
-  model: string
-): Promise<string> {
+async function runAnthropic(fullPrompt: string, model: string): Promise<string> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const msg = await client.messages.create({
     model,
@@ -49,7 +83,7 @@ async function runAnthropic(
     messages: [
       {
         role: "user",
-        content: `${prompt}\n\n---\n\n${content}`,
+        content: fullPrompt,
       },
     ],
   });

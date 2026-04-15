@@ -3,16 +3,20 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-const DEFAULT_PROMPT = `You are a personal knowledge management assistant. Given a raw markdown note, your job is to:
-1. Fix any spelling or grammar errors. Make minimal changes — preserve the author's voice exactly.
-2. Add YAML frontmatter at the top of the file with these fields:
-   - title: (a clean title inferred from the content or first heading)
-   - tags: (an array of 2-5 relevant lowercase tags, no spaces — use hyphens)
-   - created: (leave this field blank — do not invent dates)
-   - status: inbox
-   - type: (one of: note, reference, project, journal — infer from content)
-3. Do not restructure or rewrite the body. Only fix clear errors.
-4. Return ONLY the complete updated markdown file. No explanation, no preamble, no code fences.`;
+const DEFAULT_PROMPT = `You are a personal knowledge management assistant for Obsidian markdown notes.
+
+## Hard rules (do not break these)
+1. **Preserve existing metadata lines at the top of the file.** If the input has lines such as \`Last edit date: ...\`, \`Created Date: ...\`, or any similar key/value lines before the main content, copy them into your output **verbatim** (same text, same order). Do not delete, blank out, or replace them with YAML unless the input already used YAML for those values.
+2. **Do not remove body content.** Keep all headings, paragraphs, blockquotes (\`> ...\`), lists, code blocks, and wikilinks unless you are only fixing an obvious spelling/grammar typo inside them. Never drop a blockquote or section to “clean up” the note.
+3. **Minimal edits:** fix clear spelling/grammar mistakes only; do not rephrase for style.
+
+## YAML frontmatter (only when helpful)
+- If the note **already** has a valid \`---\` … \`---\` YAML block at the very top, update fields only as needed; do not strip other top-of-file metadata that sits outside that block—keep it.
+- If there is **no** YAML block but you add one, put it at the **top** only when it does not require removing the user’s \`Last edit date\` / \`Created Date\` lines. **Preferred layout when those lines exist:** output those legacy lines first (unchanged), then a blank line, then a YAML block if still needed, then the rest of the note. If that would duplicate dates awkwardly, keep the legacy lines only and skip adding YAML.
+- When YAML is used, include: title, tags (2–5 lowercase hyphenated tags), created (blank unless a real date is already in the file you can copy), status: inbox, type (note | reference | project | journal | meeting), source (blank unless a clip URL exists in the note).
+
+## Output
+Return ONLY the full markdown file. No explanation, no preamble, no markdown code fences around the whole file.`;
 
 type Settings = {
   ai_provider: string;
@@ -20,6 +24,11 @@ type Settings = {
   anthropic_model: string;
   ai_prompt: string;
   anthropic_api_key?: string;
+};
+
+type VaultSkillFile = {
+  path: string;
+  status: "loaded" | "available" | "missing";
 };
 
 const ANTHROPIC_MODELS = [
@@ -48,6 +57,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [savedKey, setSavedKey] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  const [skillFiles, setSkillFiles] = useState<VaultSkillFile[]>([]);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -68,6 +78,12 @@ export default function SettingsPage() {
     fetch("/api/ollama/models")
       .then((r) => r.json())
       .then((data) => setOllamaModels(data.models ?? []));
+
+    fetch("/api/vault/skills")
+      .then((r) => r.json())
+      .then((data: { files?: VaultSkillFile[] }) => {
+        setSkillFiles(data.files ?? []);
+      });
   }, []);
 
   function showToast(msg: string) {
@@ -134,6 +150,27 @@ export default function SettingsPage() {
     await saveSetting("ai_prompt", settings.ai_prompt);
     setSaving(false);
     showToast("Prompt saved");
+  }
+
+  async function handleOpenAiFolder() {
+    const res = await fetch("/api/vault/open-ai", { method: "POST" });
+    if (!res.ok) {
+      showToast("Could not open ai folder");
+      return;
+    }
+    showToast("Opened ai folder");
+  }
+
+  function getSkillStatusPrefix(status: VaultSkillFile["status"]): string {
+    if (status === "loaded") return "✅";
+    if (status === "missing") return "❌";
+    return "⬜";
+  }
+
+  function getSkillStatusText(status: VaultSkillFile["status"]): string {
+    if (status === "loaded") return "text-green-400";
+    if (status === "missing") return "text-red-400";
+    return "text-zinc-500";
   }
 
   function handleResetPrompt() {
@@ -369,6 +406,38 @@ export default function SettingsPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* Section 5 — Vault Knowledge Base */}
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-4">
+            Vault Knowledge Base
+          </h2>
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 space-y-4">
+            <p className="text-xs text-zinc-400">
+              Only paths marked loaded are prepended to each AI review. Other files under{" "}
+              <code className="text-zinc-500">ai/</code> exist for you in Obsidian but are not
+              auto-injected (keeps local models focused).
+            </p>
+            <div className="space-y-1.5">
+              {skillFiles.length === 0 ? (
+                <p className="text-xs text-zinc-500">No skill files discovered yet.</p>
+              ) : (
+                skillFiles.map((file) => (
+                  <div key={`${file.status}-${file.path}`} className={`text-xs font-mono ${getSkillStatusText(file.status)}`}>
+                    {getSkillStatusPrefix(file.status)}  {file.path}
+                    {file.status === "available" && " (not auto-loaded)"}
+                  </div>
+                ))
+              )}
+            </div>
+            <button
+              onClick={handleOpenAiFolder}
+              className="px-3 py-2 text-xs text-zinc-200 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors border border-zinc-700"
+            >
+              Open ai/ folder in Finder
+            </button>
           </div>
         </section>
       </div>
